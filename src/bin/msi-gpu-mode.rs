@@ -11,9 +11,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Show the active mode and the mode stored for the next boot
+    /// Show the active mode and the mode requested for the next boot
     Status,
-    /// Store a mode for the next boot: hybrid, dgpu or igpu
+    /// Request a mode for the next boot: hybrid, dgpu or igpu
     Set {
         mode: Mode,
         /// Write even if this board or variable layout is untested
@@ -59,28 +59,26 @@ fn status() -> Result<(), Error> {
         Some(mode) => println!("active:     {mode} ({})", names.join(" + ")),
         None => println!("active:     unknown, no GPU found on the PCI bus"),
     }
-    println!("next boot:  {}", var.mode());
+    match var.requested() {
+        Some(mode) => println!("requested:  {mode}"),
+        None => println!("requested:  invalid"),
+    }
     Ok(())
 }
 
 fn set(mode: Mode, force: bool, dry_run: bool) -> Result<(), Error> {
-    let before = ModeVar::load()?;
     if dry_run {
+        let var = ModeVar::load()?;
         println!(
-            "would change byte 9 of {} from 0x{:02x} ({}) to 0x{:02x} ({mode})",
-            before.name(),
-            before.mode_byte(),
-            before.mode(),
-            before.encode(mode),
+            "would change byte 9 of {} from 0x{:02x} to 0x{:02x} and raise SMI 0x11",
+            var.name(),
+            var.mode_byte(),
+            var.encode(mode),
         );
         return Ok(());
     }
-    let after = system::set_mode(mode, force)?;
-    if before.mode_byte() == after.mode_byte() {
-        println!("next boot is already {mode}");
-    } else {
-        println!("next boot: {mode} (was {}). Reboot to apply.", before.mode());
-    }
+    system::set_mode(mode, force)?;
+    println!("requested {mode}. Reboot to apply.");
     Ok(())
 }
 
@@ -98,6 +96,10 @@ fn report() -> Result<(), Error> {
     let var = ModeVar::load()?;
     println!("variable: {}", var.name());
     println!("data:     {}", var.hex());
-    println!("decoded:  {}", var.mode());
+    println!("applied:  {}", var.applied());
+    match var.requested() {
+        Some(mode) => println!("request:  {mode}"),
+        None => println!("request:  invalid"),
+    }
     Ok(())
 }

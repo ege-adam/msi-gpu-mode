@@ -1,11 +1,11 @@
-use crate::{Error, Mode, ModeVar};
+use crate::{Error, Mode, ModeVar, smi};
 use std::fs;
 
 const DMI: &str = "/sys/class/dmi/id";
 const MSI_EC: &str = "/sys/devices/platform/msi-ec";
 const PCI: &str = "/sys/bus/pci/devices";
 
-// Boards where switching through MsiDCVarData was confirmed against MSI Center.
+// Boards where a switch has been confirmed.
 const VERIFIED_BOARDS: &[&str] = &["MS-15M1"];
 
 #[derive(Debug, Clone)]
@@ -97,7 +97,6 @@ pub fn active_mode(gpus: &[Gpu]) -> Option<Mode> {
     }
 }
 
-// Empty means the machine matches what was tested.
 pub fn concerns(machine: &Machine, var: &ModeVar) -> Vec<&'static str> {
     let mut reasons = Vec::new();
     if !machine.is_verified() {
@@ -119,9 +118,10 @@ pub fn set_mode(mode: Mode, force: bool) -> Result<ModeVar, Error> {
     if !reasons.is_empty() && !force {
         return Err(Error::NeedsForce(reasons));
     }
-    if var.mode_byte() != var.encode(mode) {
+    if var.requested() != Some(mode) {
         var.write(mode)?;
     }
+    smi::commit_gpu_mode().map_err(Error::Commit)?;
     Ok(var)
 }
 

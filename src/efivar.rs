@@ -19,7 +19,7 @@ const FS_IMMUTABLE_FL: libc::c_int = 0x10;
 pub struct ModeVar {
     path: PathBuf,
     raw: Vec<u8>,
-    mode: Mode,
+    applied: Mode,
 }
 
 impl ModeVar {
@@ -39,12 +39,16 @@ impl ModeVar {
 
     fn read(path: PathBuf) -> Result<Self, Error> {
         let raw = fs::read(&path)?;
-        let mode = parse(&raw).ok_or_else(|| Error::UnknownLayout(hex(&raw)))?;
-        Ok(Self { path, raw, mode })
+        let applied = parse(&raw).ok_or_else(|| Error::UnknownLayout(hex(&raw)))?;
+        Ok(Self { path, raw, applied })
     }
 
-    pub fn mode(&self) -> Mode {
-        self.mode
+    pub fn applied(&self) -> Mode {
+        self.applied
+    }
+
+    pub fn requested(&self) -> Option<Mode> {
+        Mode::from_code(self.raw[MODE_BYTE] & 0b11)
     }
 
     pub fn name(&self) -> &str {
@@ -64,10 +68,10 @@ impl ModeVar {
     }
 
     pub fn encode(&self, mode: Mode) -> u8 {
-        (self.raw[MODE_BYTE] & 0xf0) | (mode.code() << 2) | mode.code()
+        (self.raw[MODE_BYTE] & 0xfc) | mode.code()
     }
 
-    // efivarfs keeps the variable immutable, so the flag is lifted only for the write.
+    // efivarfs marks the variable immutable.
     pub fn write(&mut self, mode: Mode) -> Result<(), Error> {
         if unsafe { libc::geteuid() } != 0 {
             return Err(Error::NotRoot);
@@ -94,8 +98,7 @@ fn parse(raw: &[u8]) -> Option<Mode> {
     if raw.len() <= MODE_BYTE || raw[..4] != NV_BS_RT {
         return None;
     }
-    // The code is stored in bits 0-1 and again in bits 2-3. Factory images can
-    // have the two disagree, and the firmware follows the upper pair.
+    // Bits 0-1 hold the request, bits 2-3 the mode the firmware applied at boot.
     Mode::from_code((raw[MODE_BYTE] >> 2) & 0b11)
 }
 
@@ -112,7 +115,6 @@ fn write_once(path: &Path, raw: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-// Returns whether the flag was set before the call.
 fn set_immutable(path: &Path, immutable: bool) -> io::Result<bool> {
     let file = File::open(path)?;
     let fd = file.as_raw_fd();

@@ -1,5 +1,6 @@
 pub mod efivar;
 pub mod mode;
+pub mod smi;
 pub mod system;
 
 pub use efivar::ModeVar;
@@ -18,6 +19,7 @@ pub enum Error {
     NeedsForce(Vec<&'static str>),
     NotRoot,
     VerifyFailed,
+    Commit(io::Error),
     Io(io::Error),
 }
 
@@ -33,6 +35,11 @@ impl fmt::Display for Error {
             }
             Error::NotRoot => write!(f, "writing the firmware variable needs root"),
             Error::VerifyFailed => write!(f, "the firmware did not keep the new value"),
+            Error::Commit(e) => write!(
+                f,
+                "the request was written but could not be committed through /dev/port ({e}); \
+                 kernel lockdown or Secure Boot may be blocking port access"
+            ),
             Error::Io(e) => write!(f, "{e}"),
         }
     }

@@ -2,6 +2,7 @@ use iced::widget::{button, checkbox, column, container, radio, row, space, text}
 use iced::{Element, Fill, Size, Task, Theme};
 use msi_gpu_mode::{Machine, Mode, ModeVar, system};
 use std::env;
+use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -22,6 +23,7 @@ struct App {
     concerns: Vec<&'static str>,
     selected: Option<Mode>,
     acknowledged: bool,
+    committed: bool,
     busy: bool,
     error: Option<String>,
 }
@@ -31,7 +33,7 @@ enum Message {
     Select(Mode),
     Acknowledge(bool),
     Apply,
-    Applied(Result<(), String>),
+    Applied(Result<bool, String>),
     Reboot,
 }
 
@@ -47,26 +49,28 @@ impl App {
             .as_ref()
             .map(|var| system::concerns(&machine, var))
             .unwrap_or_default();
+        let active = system::active_mode(&system::gpus());
         Self {
-            active: system::active_mode(&system::gpus()),
-            selected: stored.as_ref().ok().map(ModeVar::mode),
+            active,
+            selected: active,
             machine,
             stored,
             concerns,
             acknowledged: false,
+            committed: false,
             busy: false,
             error: None,
         }
     }
 
-    fn stored_mode(&self) -> Option<Mode> {
-        self.stored.as_ref().ok().map(ModeVar::mode)
+    fn requested(&self) -> Option<Mode> {
+        self.stored.as_ref().ok().and_then(ModeVar::requested)
     }
 
     fn can_apply(&self) -> bool {
         !self.busy
             && self.selected.is_some()
-            && self.selected != self.stored_mode()
+            && (self.selected != self.requested() || self.selected != self.active)
             && (self.concerns.is_empty() || self.acknowledged)
     }
 
@@ -88,14 +92,12 @@ impl App {
             }
             Message::Applied(result) => {
                 self.busy = false;
+                self.committed = result == Ok(true);
                 self.error = result.err();
                 self.stored = ModeVar::load().map_err(|e| e.to_string());
-                if self.error.is_some() {
-                    self.selected = self.stored_mode();
-                }
             }
             Message::Reboot => {
-                if let Err(e) = Command::new("systemctl").arg("reboot").spawn() {
+                if let Err(e) = reboot() {
                     self.error = Some(format!("Could not reboot: {e}"));
                 }
             }
@@ -141,7 +143,7 @@ impl App {
         }
 
         let (note, note_style) = self.note();
-        let pending = self.stored_mode().is_some() && self.stored_mode() != self.active;
+        let pending = self.committed && self.requested() != self.active;
 
         let mut actions = row![space::horizontal()].spacing(8);
         if pending && !self.busy {
@@ -190,9 +192,9 @@ impl App {
         if let Some(error) = &self.error {
             return (error.clone(), text::danger);
         }
-        match (self.stored_mode(), self.active) {
-            (Some(stored), active) if Some(stored) != active => (
-                format!("{} is set for the next boot. Reboot to switch.", stored.title()),
+        match self.requested() {
+            Some(requested) if self.committed && Some(requested) != self.active => (
+                format!("{} will be used after a reboot.", requested.title()),
                 text::warning,
             ),
             _ => ("Changes take effect after a reboot.".to_string(), text::secondary),
@@ -200,20 +202,40 @@ impl App {
     }
 }
 
-// The GUI stays unprivileged. Only the CLI runs as root, through a polkit prompt.
-fn apply(mode: Mode, force: bool) -> Result<(), String> {
+fn apply(mode: Mode, force: bool) -> Result<bool, String> {
     let mut command = Command::new("pkexec");
     command.arg(cli_path()).arg("set").arg(mode.id());
     if force {
         command.arg("--force");
     }
     let output = command.output().map_err(|e| format!("Could not run pkexec: {e}"))?;
-    if output.status.success() || output.status.code() == Some(PKEXEC_DISMISSED) {
-        return Ok(());
+    if output.status.success() {
+        return Ok(true);
+    }
+    if output.status.code() == Some(PKEXEC_DISMISSED) {
+        return Ok(false);
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
     let message = stderr.lines().last().unwrap_or("the helper failed").trim();
     Err(message.trim_start_matches("error: ").to_string())
+}
+
+// The desktop session closes applications cleanly, systemctl is the fallback.
+fn reboot() -> io::Result<()> {
+    let desktop = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+    let session_request = if desktop.contains("KDE") {
+        Command::new("busctl")
+            .args(["--user", "call", "org.kde.Shutdown", "/Shutdown", "org.kde.Shutdown", "logoutAndReboot"])
+            .status()
+    } else if desktop.contains("GNOME") {
+        Command::new("gnome-session-quit").arg("--reboot").status()
+    } else {
+        Err(io::ErrorKind::Unsupported.into())
+    };
+    if session_request.is_ok_and(|status| status.success()) {
+        return Ok(());
+    }
+    Command::new("systemctl").arg("reboot").spawn().map(drop)
 }
 
 fn cli_path() -> PathBuf {

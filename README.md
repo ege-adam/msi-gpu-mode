@@ -16,27 +16,30 @@ A change takes effect after a reboot.
 
 ## How it works
 
-MSI Center stores the selected mode in the UEFI variable `MsiDCVarData`. The firmware reads it at boot and sets up the display mux and GPU power accordingly.
+The firmware applies the mode at boot. Switching means leaving it a request and telling it to store that request.
 
-The mode is a 2-bit code (0 hybrid, 1 discrete, 2 integrated) kept twice in the low nibble of one byte: `0x30`, `0x35` and `0x3a`. This tool rewrites that nibble and leaves every other byte as it was.
+1. The request is a 2-bit code (0 hybrid, 1 discrete, 2 integrated) in bits 0 and 1 of byte 9 of the UEFI variable `MsiDCVarData`.
+2. The firmware stores it when software SMI `0x11` runs. The tool raises that SMI by writing `0x11` to I/O port `0xB2` through `/dev/port`.
+3. On the next boot the firmware sets up the display mux and GPU power, and reports the mode it applied in bits 2 and 3 of the same byte.
 
-The values were found by switching modes in MSI Center and comparing the firmware variables and the EC memory after each reboot.
+Only the two request bits are changed. The rest of the variable is written back as it was read.
 
 ## Supported hardware
 
-| Laptop | Board | Status |
-| --- | --- | --- |
-| Vector 16 HX A13VHG | MS-15M1 | Values confirmed against MSI Center |
+| Laptop | Board | BIOS | Status |
+| --- | --- | --- | --- |
+| Vector 16 HX A13VHG | MS-15M1 | E15M1IMS.90D | Switch to discrete confirmed. Hybrid and integrated not tried yet. |
 
-Other MSI laptops with a GPU switch in MSI Center probably use the same variable, but they are untested. On an untested board the tool only writes when asked to with `--force` (CLI) or the confirmation checkbox (GUI), and it never writes if the variable does not parse.
+Other MSI laptops with a GPU switch in MSI Center may work the same way, but they are untested. On an untested board the tool only writes with `--force` (CLI) or the confirmation checkbox (GUI). It never writes if the variable does not parse.
 
-Note that a switch written from Linux and then applied by a reboot still needs more testing, also on the verified board. Keep a way to switch back (MSI Center, or a BIOS reset) until you have seen it work on your machine.
+Keep a way to switch back (MSI Center, or a BIOS reset) until you have seen it work on your machine.
 
 To help add a model, run `msi-gpu-mode report` in each mode and open an issue with the output.
 
 ## Requirements
 
 - Linux booted in UEFI mode
+- Secure Boot off, because kernel lockdown blocks `/dev/port`
 - Rust 1.85 or newer to build
 - `pkexec` (polkit) for the GUI
 - Optional: the `msi-ec` kernel module, used to show the EC firmware version
@@ -68,16 +71,16 @@ msi-gpu-mode report
 $ msi-gpu-mode status
 Vector 16 HX A13VHG (MS-15M1, BIOS E15M1IMS.90D, EC 15M1IMS2.107)
 support:    verified
-active:     hybrid (Intel + NVIDIA)
-next boot:  hybrid
+active:     dgpu (NVIDIA)
+requested:  dgpu
 ```
 
 ## GUI
 
-Run `msi-gpu-mode-gui`, pick a mode and press Apply. The GUI itself runs unprivileged and asks for your password through polkit when it writes the variable.
+Run `msi-gpu-mode-gui`, pick a mode and press Apply. The GUI itself runs unprivileged and asks for your password through polkit when it writes the request.
 
 ## Risks
 
-This writes a firmware variable. A wrong value could leave the laptop booting with no usable display output until the BIOS settings are reset. Use it at your own risk.
+This writes a firmware variable and runs a firmware SMI handler. A wrong value could leave the laptop booting with no usable display output until the BIOS settings are reset. Use it at your own risk. I only have one MSI laptop to test it on.
 
 In integrated only mode, display outputs that are wired to the discrete GPU stop working.
