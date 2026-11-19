@@ -29,6 +29,7 @@ Only the two request bits are changed. The rest of the variable is written back 
 | Laptop | Board | BIOS | Status |
 | --- | --- | --- | --- |
 | Vector 16 HX A13VHG | MS-15M1 | E15M1IMS.90D | Switch to discrete confirmed. Hybrid and integrated not tried yet. |
+| Katana 17 B12UCR | MS-17L5 | E17L5IMS.315 | Hybrid confirmed (stock was discrete only). dGPU sleeps in hybrid: P8, 8 MiB idle. |
 
 Other MSI laptops with a GPU switch in MSI Center may work the same way, but they are untested. On an untested board the tool only writes with `--force` (CLI) or the confirmation checkbox (GUI). It never writes if the variable does not parse.
 
