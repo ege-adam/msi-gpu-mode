@@ -6,7 +6,7 @@ const MSI_EC: &str = "/sys/devices/platform/msi-ec";
 const PCI: &str = "/sys/bus/pci/devices";
 
 // Boards where a switch has been confirmed.
-const VERIFIED_BOARDS: &[&str] = &["MS-15M1", "MS-17L5"];
+const VERIFIED_BOARDS: &[&str] = &["MS-15M1", "MS-1585", "MS-17L5"];
 
 #[derive(Debug, Clone)]
 pub struct Machine {
