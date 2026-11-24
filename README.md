@@ -26,11 +26,11 @@ Only the two request bits are changed. The rest of the variable is written back 
 
 ## Supported hardware
 
-| Laptop | Board | BIOS | Status |
-| --- | --- | --- | --- |
-| Vector 16 HX A13VHG | MS-15M1 | E15M1IMS.90D | Switch to discrete confirmed. Hybrid and integrated not tried yet. |
-| Katana 15 B12VGK | MS-1585 | E1585IMS.30B | All three modes confirmed. |
-| Katana 17 B12UCR | MS-17L5 | E17L5IMS.315 | Hybrid confirmed (stock was discrete only). dGPU sleeps in hybrid: P8, 8 MiB idle. |
+| Laptop | Board | BIOS | Status | Reported by |
+| --- | --- | --- | --- | --- |
+| Vector 16 HX A13VHG | MS-15M1 | E15M1IMS.90D | Switch to discrete confirmed. Hybrid and integrated not tried yet. | [ege-adam](https://github.com/ege-adam) |
+| Katana 15 B12VGK | MS-1585 | E1585IMS.30B | All three modes confirmed. | [DaveBeat64](https://github.com/DaveBeat64), [#1](https://github.com/ege-adam/msi-gpu-mode/issues/1) |
+| Katana 17 B12UCR | MS-17L5 | E17L5IMS.315 | Hybrid confirmed (stock was discrete only). dGPU sleeps in hybrid: P8, 8 MiB idle. | [aasb13](https://github.com/aasb13), [#3](https://github.com/ege-adam/msi-gpu-mode/issues/3), [#4](https://github.com/ege-adam/msi-gpu-mode/pull/4) |
 
 Other MSI laptops with a GPU switch in MSI Center may work the same way, but they are untested. On an untested board the tool only writes with `--force` (CLI) or the confirmation checkbox (GUI). It never writes if the variable does not parse.
 
@@ -38,7 +38,7 @@ Keep a way to switch back (MSI Center, or a BIOS reset) until you have seen it w
 
 To help add a model, run `msi-gpu-mode report` in each mode and open an issue with the output.
 
-Reports so far came from DaveBeat64 (Katana 15 B12VGK, all modes), aasb13 (Katana 17 B12UCR, hybrid, and the pull request for it) and QkiZMR (Katana 15 B13VFK, Secure Boot behaviour).
+The Secure Boot behaviour was reported by [QkiZMR](https://github.com/QkiZMR) in [#2](https://github.com/ege-adam/msi-gpu-mode/issues/2) on a Katana 15 B13VFK.
 
 ## Requirements
 
