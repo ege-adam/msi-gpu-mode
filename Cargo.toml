@@ -3,6 +3,7 @@ name = "msi-gpu-mode"
 version = "0.1.1"
 edition = "2024"
 description = "Switch the GPU mode of MSI laptops on Linux"
+license = "Unlicense"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
